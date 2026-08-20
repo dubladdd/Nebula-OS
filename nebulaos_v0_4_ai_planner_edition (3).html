@@ -1,0 +1,2241 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NebulaOS v0.4 AI Edition</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;800&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <style>
+        :root {
+            --os-bg: #09090b;
+            --os-taskbar: rgba(9, 9, 11, 0.6);
+            --os-window-bg: rgba(24, 24, 27, 0.85);
+            --os-window-border: rgba(63, 63, 70, 0.5);
+            --os-window-active-border: rgba(0, 217, 255, 0.5);
+            --os-accent: #00d9ff;
+            --os-accent-glow: rgba(0, 217, 255, 0.3);
+            --os-text: #f4f4f5;
+            --os-text-muted: #a1a1aa;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            margin: 0;
+            overflow: hidden; 
+            background-color: var(--os-bg);
+            background-image: 
+                radial-gradient(circle at 10% 20%, rgba(0, 217, 255, 0.15), transparent 30%),
+                radial-gradient(circle at 90% 80%, rgba(138, 43, 226, 0.15), transparent 30%),
+                url('https://images.unsplash.com/photo-1538370965046-79565b7397cb?q=80&w=2000&auto=format&fit=crop');
+            background-size: cover;
+            background-position: center;
+            color: var(--os-text);
+            user-select: none;
+        }
+
+        /* Boot Screen */
+        #boot-screen {
+            position: fixed;
+            inset: 0;
+            background-color: #000;
+            z-index: 99999;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            transition: opacity 1s ease-out;
+        }
+        .spinner {
+            width: 40px; height: 40px;
+            border: 3px solid rgba(255,255,255,0.1);
+            border-top-color: var(--os-accent);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* --- DESKTOP ENVIRONMENT --- */
+        #desktop {
+            position: absolute;
+            inset: 0;
+            bottom: 48px; /* Taskbar space */
+            padding: 1.5rem;
+            display: flex;
+            flex-direction: column;
+            flex-wrap: wrap;
+            align-content: flex-start;
+            gap: 1rem;
+            z-index: 10;
+        }
+
+        .desktop-icon {
+            width: 76px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 0.5rem;
+            border-radius: 0.5rem;
+            cursor: pointer;
+            transition: all 0.2s;
+            border: 1px solid transparent;
+        }
+        .desktop-icon:hover {
+            background-color: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255,255,255,0.2);
+            backdrop-filter: blur(4px);
+        }
+        .desktop-icon i {
+            font-size: 2.25rem;
+            margin-bottom: 0.35rem;
+            color: #fff;
+            filter: drop-shadow(0 2px 4px rgba(0,0,0,0.8));
+        }
+        .desktop-icon-label {
+            font-size: 0.75rem;
+            font-weight: 500;
+            text-align: center;
+            text-shadow: 0 1px 3px rgba(0,0,0,1);
+            line-height: 1.1;
+        }
+
+        /* --- TASKBAR --- */
+        #taskbar {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 100vw;
+            height: 48px;
+            background: var(--os-taskbar);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0 0.5rem;
+            z-index: 9999;
+        }
+
+        .taskbar-center {
+            flex-grow: 1;
+            display: flex;
+            justify-content: center;
+            gap: 0.5rem;
+        }
+
+        .taskbar-app-icon {
+            width: 38px;
+            height: 38px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.25rem;
+            border-radius: 0.5rem;
+            cursor: pointer;
+            transition: all 0.2s;
+            position: relative;
+            color: #fff;
+        }
+        .taskbar-app-icon:hover { background: rgba(255, 255, 255, 0.15); }
+        .taskbar-app-icon.open::after {
+            content: ''; position: absolute; bottom: 2px; left: 50%;
+            transform: translateX(-50%); width: 4px; height: 4px;
+            background-color: var(--os-text-muted); border-radius: 50%;
+        }
+        .taskbar-app-icon.active::after {
+            width: 12px; background-color: var(--os-accent); border-radius: 2px;
+        }
+
+        /* --- WINDOW MANAGER --- */
+        .window {
+            position: absolute;
+            background: var(--os-window-bg);
+            backdrop-filter: blur(25px);
+            -webkit-backdrop-filter: blur(25px);
+            border: 1px solid var(--os-window-border);
+            border-radius: 0.75rem;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+            display: flex;
+            flex-direction: column;
+            resize: both;
+            overflow: hidden;
+            z-index: 100;
+            
+            /* State animations */
+            opacity: 0;
+            transform: scale(0.95) translateY(10px);
+            pointer-events: none;
+            transition: opacity 0.2s, transform 0.2s, box-shadow 0.2s, border-color 0.2s;
+        }
+
+        .window.open {
+            opacity: 1;
+            transform: scale(1) translateY(0);
+            pointer-events: auto;
+        }
+        
+        .window.minimized {
+            opacity: 0;
+            transform: scale(0.8) translateY(100px);
+            pointer-events: none;
+        }
+
+        .window.maximized {
+            top: 0 !important; left: 0 !important;
+            width: 100vw !important; height: calc(100vh - 48px) !important;
+            border-radius: 0; resize: none;
+        }
+
+        .window.active {
+            border-color: var(--os-window-active-border);
+            box-shadow: 0 0 20px rgba(0, 217, 255, 0.1), 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+        }
+
+        .window-header {
+            height: 36px;
+            background: rgba(255,255,255,0.03);
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0 1rem;
+            cursor: grab;
+        }
+        .window-header:active { cursor: grabbing; }
+
+        .window-title {
+            font-size: 0.8rem;
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            pointer-events: none;
+        }
+
+        .window-controls { display: flex; gap: 0.5rem; align-items: center; }
+        .win-ctrl-btn {
+            width: 12px; height: 12px; border-radius: 50%;
+            border: none; cursor: pointer; transition: 0.2s;
+            display: flex; align-items: center; justify-content: center;
+        }
+        .win-ctrl-close { background-color: #ef4444; }
+        .win-ctrl-min { background-color: #f59e0b; }
+        .win-ctrl-max { background-color: #10b981; }
+        
+        .window-controls:hover .win-ctrl-btn::before {
+            content: ''; display: block; width: 6px; height: 6px;
+            background: rgba(0,0,0,0.4);
+        }
+        .win-ctrl-btn:hover { filter: brightness(1.2); }
+
+        .window-content {
+            flex-grow: 1;
+            position: relative;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.3); }
+
+        /* Start Menu */
+        #start-menu {
+            position: absolute; bottom: 60px; left: 10px;
+            width: 320px;
+            background: var(--os-window-bg); backdrop-filter: blur(30px);
+            border: 1px solid var(--os-window-border);
+            border-radius: 0.75rem;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.8);
+            z-index: 10000;
+            padding: 1rem;
+            transform: translateY(20px); opacity: 0; pointer-events: none;
+            transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        #start-menu.open { transform: translateY(0); opacity: 1; pointer-events: auto; }
+
+        /* App: Voice Studio */
+        .visualizer-bar {
+            width: 6px; background-color: var(--os-accent);
+            border-radius: 3px; transition: height 0.1s ease;
+            height: 4px;
+        }
+        
+        /* App: Notepad */
+        #notepad-textarea {
+            flex-grow: 1; background: transparent; border: none; color: #e2e8f0;
+            padding: 1rem; resize: none; font-family: 'Fira Code', monospace;
+            font-size: 0.9rem; outline: none;
+        }
+        
+        /* App: Cosmic Planner specific styles for generated HTML */
+        .ai-planner-output h3 { font-size: 1.2rem; font-weight: bold; color: #fb923c; margin-top: 1rem; margin-bottom: 0.5rem; }
+        .ai-planner-output ul { list-style-type: disc; margin-left: 1.5rem; margin-bottom: 1rem; }
+        .ai-planner-output li { margin-bottom: 0.25rem; color: #e2e8f0; font-size: 0.9rem; }
+        .ai-planner-output strong { color: #fff; }
+
+        /* --- Nebula Files --- */
+        .context-menu {
+            position: absolute; background: rgba(24, 24, 27, 0.95); backdrop-filter: blur(10px);
+            border: 1px solid var(--os-window-border); border-radius: 0.5rem; padding: 0.3rem; 
+            box-shadow: 0 10px 25px rgba(0,0,0,0.8); z-index: 100000; display: none; flex-direction: column; min-width: 180px;
+        }
+        .context-menu button {
+            text-align: left; padding: 0.5rem 0.75rem; border-radius: 0.25rem; font-size: 0.8rem;
+            color: var(--os-text); background: transparent; border: none; cursor: pointer;
+            display: flex; gap: 0.5rem; align-items: center; transition: 0.1s;
+        }
+        .context-menu button:hover { background: rgba(255,255,255,0.1); }
+        .context-menu .cm-danger { color: #ef4444; }
+        .context-menu .cm-danger:hover { background: rgba(239, 68, 68, 0.15); }
+        .context-divider { height: 1px; background: rgba(255,255,255,0.1); margin: 0.25rem 0; }
+        
+        .fm-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(80px, 1fr)); gap: 1rem; align-content: start; }
+        .fm-item { display: flex; flex-direction: column; align-items: center; text-align: center; cursor: pointer; padding: 0.5rem; border-radius: 0.5rem; border: 1px solid transparent; transition: 0.1s; }
+        .fm-item:hover { background: rgba(255,255,255,0.05); border-color: rgba(255,255,255,0.1); }
+        .fm-item.selected { background: rgba(0,217,255,0.15); border-color: rgba(0,217,255,0.4); }
+
+    </style>
+</head>
+<body>
+
+    <!-- Cosmic Engine Layers -->
+    <canvas id="cosmic-canvas" class="fixed inset-0 pointer-events-none z-[1] mix-blend-screen opacity-80"></canvas>
+    <div id="ambient-overlay" class="fixed inset-0 pointer-events-none transition-colors duration-1000 z-[2]" style="background: radial-gradient(circle at 50% 50%, rgba(138, 43, 226, 0.05), transparent 60%);"></div>
+
+    <!-- OS Custom Modal (Replaces alerts/prompts) -->
+    <div id="os-modal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-[99999] hidden flex items-center justify-center">
+        <div class="bg-slate-900 border border-slate-700 p-5 rounded-xl shadow-2xl w-80 transform transition-all">
+            <h3 id="os-modal-title" class="text-white font-bold mb-3 flex items-center gap-2"><i class="fa-solid fa-terminal text-cyan-400"></i> <span>System Prompt</span></h3>
+            <input type="text" id="os-modal-input" class="w-full bg-black/50 border border-slate-600 rounded-lg p-2.5 text-sm text-white mb-4 focus:border-cyan-400 outline-none" autocomplete="off">
+            <div class="flex justify-end gap-2">
+                <button id="os-modal-cancel" class="px-4 py-2 rounded-lg bg-slate-800 text-slate-300 hover:bg-slate-700 text-sm transition-colors">Cancel</button>
+                <button id="os-modal-confirm" class="px-4 py-2 rounded-lg bg-cyan-600 text-white hover:bg-cyan-500 font-medium text-sm transition-colors">Confirm</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Context Menu for Files -->
+    <div id="fm-context-menu" class="context-menu">
+        <button id="cm-open"><i class="fa-solid fa-arrow-up-right-from-square w-4"></i> Open</button>
+        <button id="cm-rename"><i class="fa-solid fa-pen w-4"></i> Rename</button>
+        <button id="cm-duplicate"><i class="fa-solid fa-copy w-4"></i> Duplicate</button>
+        <div class="context-divider"></div>
+        <button id="cm-summarize" class="text-pink-400"><i class="fa-solid fa-wand-magic-sparkles w-4"></i> AI Summarize</button>
+        <button id="cm-analyze" class="text-cyan-400"><i class="fa-solid fa-brain w-4"></i> AI Analyze</button>
+        <button id="cm-download"><i class="fa-solid fa-download w-4"></i> Download</button>
+        <div class="context-divider"></div>
+        <button id="cm-delete" class="cm-danger"><i class="fa-solid fa-trash w-4"></i> Delete</button>
+    </div>
+
+    <!-- Boot Screen -->
+    <div id="boot-screen">
+        <i class="fa-solid fa-planet-ringed text-6xl text-[#00d9ff] mb-6"></i>
+        <div class="text-2xl font-bold tracking-widest mb-8">NEBULA<span class="text-[#00d9ff]">OS</span></div>
+        <div class="spinner"></div>
+        <div class="mt-4 text-sm text-slate-500 font-mono" id="boot-text">Loading Kernel...</div>
+    </div>
+
+    <!-- Desktop Area -->
+    <div id="desktop">
+        <div class="desktop-icon" data-app="novaai">
+            <i class="fa-solid fa-brain text-cyan-400"></i>
+            <div class="desktop-icon-label">Nova AI</div>
+        </div>
+        <div class="desktop-icon" data-app="planner">
+            <i class="fa-solid fa-list-check text-orange-400"></i>
+            <div class="desktop-icon-label">Cosmic Planner</div>
+        </div>
+        <div class="desktop-icon" data-app="aicanvas">
+            <i class="fa-solid fa-wand-magic-sparkles text-pink-400"></i>
+            <div class="desktop-icon-label">AI Studio</div>
+        </div>
+        <div class="desktop-icon" data-app="voicestudio">
+            <i class="fa-solid fa-microphone-lines text-blue-400"></i>
+            <div class="desktop-icon-label">Voice Studio</div>
+        </div>
+        <div class="desktop-icon" data-app="notepad">
+            <i class="fa-solid fa-file-lines text-emerald-400"></i>
+            <div class="desktop-icon-label">Notes</div>
+        </div>
+        <div class="desktop-icon" data-app="sysmon">
+            <i class="fa-solid fa-microchip text-purple-400"></i>
+            <div class="desktop-icon-label">Sys Mon</div>
+        </div>
+        <div class="desktop-icon" data-app="files">
+            <i class="fa-solid fa-folder-open text-yellow-400"></i>
+            <div class="desktop-icon-label">Files</div>
+        </div>
+        <div class="desktop-icon" data-app="terminal">
+            <i class="fa-solid fa-terminal text-green-400"></i>
+            <div class="desktop-icon-label">Terminal</div>
+        </div>
+    </div>
+
+    <!-- Start Menu -->
+    <div id="start-menu">
+        <div class="flex items-center gap-3 mb-6 p-2 bg-white/5 rounded-lg border border-white/10">
+            <div class="w-10 h-10 rounded-full bg-gradient-to-tr from-cyan-400 to-purple-600 flex items-center justify-center font-bold">N</div>
+            <div>
+                <div class="text-sm font-bold flex items-center gap-2">
+                    Guest User 
+                    <span class="bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 text-[10px] px-1.5 py-0.5 rounded font-mono">GEMINI READY</span>
+                </div>
+                <div class="text-xs text-slate-400">System Administrator</div>
+            </div>
+        </div>
+        <div class="text-xs font-bold text-slate-400 mb-2 uppercase tracking-wider">System Applications</div>
+        <ul class="space-y-1 mb-6" id="start-menu-list">
+            <li><button class="w-full text-left p-2 hover:bg-white/10 rounded-md text-sm flex gap-3 items-center transition-colors" data-app="novaai">
+                <i class="fa-solid fa-brain text-cyan-400 w-5 text-center"></i> Nova AI Assistant
+            </button></li>
+            <li><button class="w-full text-left p-2 hover:bg-white/10 rounded-md text-sm flex gap-3 items-center transition-colors" data-app="planner">
+                <i class="fa-solid fa-list-check text-orange-400 w-5 text-center"></i> Cosmic Planner ✨
+            </button></li>
+            <li><button class="w-full text-left p-2 hover:bg-white/10 rounded-md text-sm flex gap-3 items-center transition-colors" data-app="aicanvas">
+                <i class="fa-solid fa-wand-magic-sparkles text-pink-400 w-5 text-center"></i> AI Studio & Wallpaper
+            </button></li>
+            <li><button class="w-full text-left p-2 hover:bg-white/10 rounded-md text-sm flex gap-3 items-center transition-colors" data-app="voicestudio">
+                <i class="fa-solid fa-microphone-lines text-blue-400 w-5 text-center"></i> Gemini Voice Studio
+            </button></li>
+            <li><button class="w-full text-left p-2 hover:bg-white/10 rounded-md text-sm flex gap-3 items-center transition-colors" data-app="notepad">
+                <i class="fa-solid fa-file-lines text-emerald-400 w-5 text-center"></i> Nebula Notes AI
+            </button></li>
+            <li><button class="w-full text-left p-2 hover:bg-white/10 rounded-md text-sm flex gap-3 items-center transition-colors" data-app="sysmon">
+                <i class="fa-solid fa-microchip text-purple-400 w-5 text-center"></i> System Monitor
+            </button></li>
+            <li><button class="w-full text-left p-2 hover:bg-white/10 rounded-md text-sm flex gap-3 items-center transition-colors" data-app="files">
+                <i class="fa-solid fa-folder-open text-yellow-400 w-5 text-center"></i> Nebula Files
+            </button></li>
+            <li><button class="w-full text-left p-2 hover:bg-white/10 rounded-md text-sm flex gap-3 items-center transition-colors" data-app="terminal">
+                <i class="fa-solid fa-terminal text-green-400 w-5 text-center"></i> Nebula Terminal
+            </button></li>
+        </ul>
+        <div class="border-t border-white/10 pt-4 flex justify-between">
+            <button class="p-2 hover:bg-white/10 rounded text-slate-300" title="Settings"><i class="fa-solid fa-gear"></i></button>
+            <button class="p-2 hover:bg-red-500/20 text-red-400 rounded" title="Power Off"><i class="fa-solid fa-power-off"></i></button>
+        </div>
+    </div>
+
+    <!-- APP: Nova AI Copilot -->
+    <div class="window" id="win-novaai" style="width: 750px; height: 560px; top: 8%; left: 10%;">
+        <div class="window-header">
+            <div class="window-title"><i class="fa-solid fa-network-wired text-cyan-400"></i> Nebula AI Core (Orchestrator)</div>
+            <div class="window-controls">
+                <button class="win-ctrl-btn win-ctrl-min"></button>
+                <button class="win-ctrl-btn win-ctrl-max"></button>
+                <button class="win-ctrl-btn win-ctrl-close"></button>
+            </div>
+        </div>
+        <div class="window-content flex p-0 bg-slate-950/90 h-full">
+            <!-- AI Agent Swarm Sidebar -->
+            <div class="w-44 border-r border-white/10 bg-black/60 p-2 flex flex-col gap-1 overflow-y-auto">
+                <div class="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2 mt-1 px-2">AI Core Swarm</div>
+                
+                <div id="agent-nova" class="p-2 rounded text-xs flex items-center gap-2 text-white bg-cyan-500/20 border border-cyan-500/30 transition-all">
+                    <i class="fa-solid fa-network-wired text-cyan-400 w-4"></i> Nova <span class="text-[9px] text-cyan-300 ml-auto font-mono">CORE</span>
+                </div>
+                <div id="agent-orbit" class="p-2 rounded text-xs flex items-center gap-2 text-slate-400 transition-all">
+                    <i class="fa-solid fa-list-check text-orange-400 w-4"></i> Orbit <span class="text-[9px] text-slate-500 ml-auto font-mono">PLAN</span>
+                </div>
+                <div id="agent-pixel" class="p-2 rounded text-xs flex items-center gap-2 text-slate-400 transition-all">
+                    <i class="fa-solid fa-palette text-pink-400 w-4"></i> Pixel <span class="text-[9px] text-slate-500 ml-auto font-mono">ART</span>
+                </div>
+                <div id="agent-echo" class="p-2 rounded text-xs flex items-center gap-2 text-slate-400 transition-all">
+                    <i class="fa-solid fa-waveform text-blue-400 w-4"></i> Echo <span class="text-[9px] text-slate-500 ml-auto font-mono">VOICE</span>
+                </div>
+                <div id="agent-forge" class="p-2 rounded text-xs flex items-center gap-2 text-slate-400 transition-all">
+                    <i class="fa-solid fa-code text-green-400 w-4"></i> Forge <span class="text-[9px] text-slate-500 ml-auto font-mono">CODE</span>
+                </div>
+                <div id="agent-archivist" class="p-2 rounded text-xs flex items-center gap-2 text-slate-400 transition-all">
+                    <i class="fa-solid fa-box-archive text-yellow-400 w-4"></i> Archivist <span class="text-[9px] text-slate-500 ml-auto font-mono">MEM</span>
+                </div>
+            </div>
+
+            <!-- Chat / Orchestration Area -->
+            <div class="flex-grow flex flex-col justify-between p-3 gap-3">
+                <div class="flex items-center justify-between bg-white/5 p-2.5 rounded-lg border border-white/10 text-xs">
+                    <div class="flex items-center gap-2">
+                        <span class="w-2 h-2 rounded-full bg-cyan-400 animate-pulse"></span>
+                        <span class="text-slate-300 font-medium">Core: <strong class="text-white">gemini-2.5-flash</strong></span>
+                    </div>
+                    <label class="flex items-center gap-2 cursor-pointer text-slate-400 hover:text-white transition-colors">
+                        <input type="checkbox" id="nova-search-toggle" class="rounded accent-cyan-400" checked>
+                        <span>Google Search Grounding</span>
+                    </label>
+                </div>
+
+                <div id="nova-chat-history" class="flex-grow overflow-y-auto space-y-3 p-2 bg-black/40 rounded-lg border border-white/5 font-sans text-sm">
+                    <div class="bg-cyan-950/40 border border-cyan-500/30 p-3 rounded-xl text-slate-200">
+                        👋 <strong>I am Nova, the NebulaOS Orchestrator.</strong><br>
+                        Ask me to build complex projects. I will dynamically delegate tasks to Orbit, Pixel, Echo, Forge, and Archivist to generate plans, code, art, and voice lines directly to your File System!
+                    </div>
+                </div>
+
+                <div class="flex gap-2">
+                    <input type="text" id="nova-input" placeholder="e.g. 'Make me a cyberpunk music project with artwork and an intro voiceover...'" class="flex-grow bg-black/50 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-cyan-400">
+                    <button id="nova-send-btn" class="bg-cyan-500 hover:bg-cyan-400 text-black font-bold px-4 py-2 rounded-lg transition-colors flex items-center gap-2">
+                        <i class="fa-solid fa-paper-plane"></i> Execute
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- NEW APP: Cosmic Planner ✨ -->
+    <div class="window" id="win-planner" style="width: 600px; height: 500px; top: 15%; left: 45%;">
+        <div class="window-header">
+            <div class="window-title"><i class="fa-solid fa-list-check text-orange-400"></i> Cosmic Planner ✨</div>
+            <div class="window-controls">
+                <button class="win-ctrl-btn win-ctrl-min"></button>
+                <button class="win-ctrl-btn win-ctrl-max"></button>
+                <button class="win-ctrl-btn win-ctrl-close"></button>
+            </div>
+        </div>
+        <div class="window-content p-4 flex flex-col gap-3">
+            <div class="bg-white/5 p-3 rounded-lg border border-white/10">
+                <label class="text-xs font-bold text-slate-400 mb-1 block">Project / Goal</label>
+                <div class="flex gap-2">
+                    <input type="text" id="planner-goal" placeholder="e.g. Plan a surprise 30th birthday party..." class="flex-grow bg-black/50 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-orange-400">
+                    <button id="btn-planner-ai" class="bg-gradient-to-r from-orange-500 to-pink-500 hover:from-orange-400 hover:to-pink-400 text-white font-bold px-4 py-2 rounded-lg transition-colors text-sm flex items-center gap-2">
+                        <i class="fa-solid fa-wand-magic-sparkles"></i> AI Break Down
+                    </button>
+                </div>
+            </div>
+            <div class="flex-grow bg-black/40 border border-white/10 rounded-lg p-4 overflow-y-auto ai-planner-output" id="planner-results">
+                <div class="text-slate-500 text-sm flex flex-col items-center justify-center h-full opacity-70">
+                    <i class="fa-solid fa-map-location-dot text-4xl mb-3 text-orange-400/50"></i>
+                    <p>Enter a complex goal above.</p>
+                    <p>Gemini will structure it into actionable milestones!</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- APP: AI Canvas & Wallpaper Studio -->
+    <div class="window" id="win-aicanvas" style="width: 620px; height: 540px; top: 12%; left: 35%;">
+        <div class="window-header">
+            <div class="window-title"><i class="fa-solid fa-wand-magic-sparkles text-pink-400"></i> AI Studio & Wallpaper Generator</div>
+            <div class="window-controls">
+                <button class="win-ctrl-btn win-ctrl-min"></button>
+                <button class="win-ctrl-btn win-ctrl-max"></button>
+                <button class="win-ctrl-btn win-ctrl-close"></button>
+            </div>
+        </div>
+        <div class="window-content p-4 flex flex-col gap-3">
+            <div class="flex gap-2">
+                <input type="text" id="aicanvas-prompt" placeholder="e.g. A futuristic cyber-nebula city at sunset with glowing neon spires..." class="flex-grow bg-black/50 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-pink-400">
+                <button id="aicanvas-gen-btn" class="bg-pink-500 hover:bg-pink-400 text-black font-bold px-4 py-2 rounded-lg transition-colors flex items-center gap-2 text-sm">
+                    <i class="fa-solid fa-palette"></i> Generate
+                </button>
+            </div>
+
+            <div class="relative flex-grow bg-black/60 border border-white/10 rounded-xl overflow-hidden flex items-center justify-center min-h-[280px]">
+                <div id="aicanvas-loader" class="hidden flex-col items-center gap-3 text-pink-400">
+                    <div class="spinner border-pink-400"></div>
+                    <span class="text-xs font-mono">Synthesizing Artwork with Imagen 4.0...</span>
+                </div>
+                <img id="aicanvas-preview" class="w-full h-full object-cover hidden" alt="Generated Artwork">
+                <div id="aicanvas-placeholder" class="text-center text-slate-500 p-6 text-sm">
+                    <i class="fa-solid fa-image text-4xl mb-2 opacity-50"></i>
+                    <p>Enter a visual description and click Generate to create custom artwork or OS wallpapers.</p>
+                </div>
+            </div>
+
+            <div class="flex items-center justify-between">
+                <div class="text-xs text-slate-400 font-mono">Powered by <strong>imagen-4.0-generate-001</strong></div>
+                <button id="aicanvas-set-wallpaper" class="bg-white/10 hover:bg-white/20 text-white border border-white/20 text-xs px-3 py-2 rounded-lg transition-colors flex items-center gap-2 disabled:opacity-50" disabled>
+                    <i class="fa-solid fa-desktop text-cyan-400"></i> Set as Desktop Wallpaper
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- APP: Voice Studio -->
+    <div class="window" id="win-voicestudio" style="width: 580px; height: 480px; top: 10%; left: 20%;">
+        <div class="window-header">
+            <div class="window-title"><i class="fa-solid fa-microphone-lines text-blue-400"></i> Voice Studio (Gemini Neural Engine)</div>
+            <div class="window-controls">
+                <button class="win-ctrl-btn win-ctrl-min"></button>
+                <button class="win-ctrl-btn win-ctrl-max"></button>
+                <button class="win-ctrl-btn win-ctrl-close"></button>
+            </div>
+        </div>
+        <div class="window-content p-4 flex flex-col gap-3">
+            <div class="flex items-center justify-between bg-black/40 p-3 rounded-lg border border-white/10">
+                <div>
+                    <div class="text-xs text-[#00d9ff] font-bold tracking-wider mb-0.5">GEMINI 2.5 NEURAL TTS ENGINE</div>
+                    <div class="text-[10px] text-slate-400" id="tts-status-text">Ready for high-fidelity speech synthesis.</div>
+                </div>
+                <div class="flex items-end gap-1 h-8 px-2" id="vs-visualizer">
+                    <div class="visualizer-bar"></div><div class="visualizer-bar"></div>
+                    <div class="visualizer-bar"></div><div class="visualizer-bar"></div>
+                    <div class="visualizer-bar"></div><div class="visualizer-bar"></div>
+                    <div class="visualizer-bar"></div><div class="visualizer-bar"></div>
+                </div>
+            </div>
+            
+            <textarea id="tts-input" class="w-full h-24 bg-black/40 border border-white/10 rounded-lg p-3 text-sm text-white resize-none focus:outline-none focus:border-[#00d9ff]" placeholder="Enter text to synthesize using Gemini TTS..."></textarea>
+            
+            <div class="grid grid-cols-2 gap-2">
+                <div>
+                    <label class="text-[11px] font-bold text-slate-400 mb-1 block">Voice Personality</label>
+                    <select id="tts-voice-select" class="w-full bg-black/50 border border-white/10 rounded-lg p-2 text-xs text-white focus:outline-none focus:border-cyan-400">
+                        <option value="Zephyr">Zephyr (Bright & Clear)</option>
+                        <option value="Puck">Puck (Upbeat & Energetic)</option>
+                        <option value="Kore">Kore (Firm & Authoritative)</option>
+                        <option value="Fenrir">Fenrir (Excitable & Bold)</option>
+                        <option value="Aoede">Aoede (Breezy & Natural)</option>
+                        <option value="Gacrux">Gacrux (Mature & Deep)</option>
+                        <option value="Sulafat">Sulafat (Warm & Friendly)</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="text-[11px] font-bold text-slate-400 mb-1 block">Emotional Style Guidance</label>
+                    <input type="text" id="tts-style-prompt" placeholder="e.g. Say in a confident sci-fi movie trailer voice:" value="Say clearly and engagingly: " class="w-full bg-black/50 border border-white/10 rounded-lg p-2 text-xs text-white focus:outline-none focus:border-cyan-400">
+                </div>
+            </div>
+
+            <div class="grid grid-cols-3 gap-2 mt-1">
+                <button id="btn-tts-read" class="col-span-2 bg-[#00d9ff] hover:bg-cyan-300 text-black font-bold py-2 rounded-lg transition-colors flex items-center justify-center gap-2 text-sm">
+                    <i class="fa-solid fa-waveform"></i> Generate Gemini Speech
+                </button>
+                <button id="btn-tts-stop" class="bg-red-500/20 hover:bg-red-500 text-red-400 hover:text-white border border-red-500/30 py-2 rounded-lg transition-colors flex items-center justify-center gap-2 text-sm">
+                    <i class="fa-solid fa-stop"></i> Stop
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- APP: Nebula Notes (Upgraded with AI Tools) -->
+    <div class="window" id="win-notepad" style="width: 620px; height: 500px; top: 15%; left: 30%;">
+        <div class="window-header">
+            <div class="window-title"><i class="fa-solid fa-file-lines text-emerald-400"></i> Nebula Notes AI</div>
+            <div class="window-controls">
+                <button class="win-ctrl-btn win-ctrl-min"></button>
+                <button class="win-ctrl-btn win-ctrl-max"></button>
+                <button class="win-ctrl-btn win-ctrl-close"></button>
+            </div>
+        </div>
+        <div class="bg-black/40 border-b border-white/10 p-2 flex items-center justify-between">
+            <div class="flex gap-2">
+                <button class="text-xs px-3 py-1 hover:bg-white/10 rounded transition-colors text-slate-300" onclick="document.getElementById('notepad-textarea').value=''">Clear</button>
+            </div>
+            <!-- AI Action Bar inside Notes -->
+            <div class="flex gap-1">
+                <button id="note-ai-polish" class="text-xs bg-emerald-500/20 hover:bg-emerald-500/40 border border-emerald-500/40 text-emerald-300 px-2.5 py-1 rounded flex items-center gap-1 transition-colors">
+                    ✨ AI Polish
+                </button>
+                <button id="note-ai-summarize" class="text-xs bg-cyan-500/20 hover:bg-cyan-500/40 border border-cyan-500/40 text-cyan-300 px-2.5 py-1 rounded flex items-center gap-1 transition-colors">
+                    ✨ Summarize
+                </button>
+            </div>
+        </div>
+        <div class="window-content relative">
+            <textarea id="notepad-textarea" spellcheck="false">Welcome to NebulaOS v0.4 AI Edition!
+
+Integrated Gemini Features:
+1. Nova AI Assistant - Chat with gemini-2.5-flash-preview & Google Search Grounding.
+2. Cosmic Planner ✨ - Break down complex tasks into actionable milestones!
+3. AI Studio - Generate wallpapers with imagen-4.0.
+4. Gemini Voice Studio - Synthesize voices with raw PCM neural audio.
+5. AI Document Tools - Highlight text here and click AI Polish or Summarize above!
+</textarea>
+        </div>
+        <div class="bg-black/60 border-t border-white/10 px-3 py-1 text-[10px] text-slate-500 flex justify-between">
+            <span>UTF-8</span>
+            <span id="note-chars">0 chars</span>
+        </div>
+    </div>
+
+    <!-- APP: System Monitor -->
+    <div class="window" id="win-sysmon" style="width: 400px; height: 300px; top: 20%; left: 50%;">
+        <div class="window-header">
+            <div class="window-title"><i class="fa-solid fa-microchip text-purple-400"></i> System Monitor</div>
+            <div class="window-controls">
+                <button class="win-ctrl-btn win-ctrl-min"></button>
+                <button class="win-ctrl-btn win-ctrl-max"></button>
+                <button class="win-ctrl-btn win-ctrl-close"></button>
+            </div>
+        </div>
+        <div class="window-content p-4 text-sm font-mono">
+            <div class="mb-4">
+                <div class="flex justify-between text-xs mb-1">
+                    <span class="text-slate-300">CPU Usage</span>
+                    <span id="sys-cpu-val" class="text-[#00d9ff]">12%</span>
+                </div>
+                <div class="w-full bg-black/50 rounded-full h-2 border border-white/10">
+                    <div id="sys-cpu-bar" class="bg-[#00d9ff] h-2 rounded-full transition-all duration-500" style="width: 12%"></div>
+                </div>
+            </div>
+            <div class="mb-4">
+                <div class="flex justify-between text-xs mb-1">
+                    <span class="text-slate-300">Memory Allocation</span>
+                    <span id="sys-ram-val" class="text-purple-400">2.4 GB / 8.0 GB</span>
+                </div>
+                <div class="w-full bg-black/50 rounded-full h-2 border border-white/10">
+                    <div id="sys-ram-bar" class="bg-purple-400 h-2 rounded-full transition-all duration-500" style="width: 30%"></div>
+                </div>
+            </div>
+            <div class="mt-6 border-t border-white/10 pt-4">
+                <div class="grid grid-cols-2 gap-2 text-xs text-slate-400">
+                    <div>OS Version:</div><div class="text-white text-right">NebulaOS v0.4b</div>
+                    <div>Architecture:</div><div class="text-white text-right">Web x64</div>
+                    <div>Uptime:</div><div class="text-white text-right" id="sys-uptime">00:00:00</div>
+                    <div>Active Tasks:</div><div class="text-white text-right" id="sys-tasks">0</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- NEW APP: Nebula Files -->
+    <div class="window" id="win-files" style="width: 720px; height: 500px; top: 12%; left: 25%;">
+        <div class="window-header">
+            <div class="window-title"><i class="fa-solid fa-folder-open text-yellow-400"></i> Nebula Files</div>
+            <div class="window-controls">
+                <button class="win-ctrl-btn win-ctrl-min"></button>
+                <button class="win-ctrl-btn win-ctrl-max"></button>
+                <button class="win-ctrl-btn win-ctrl-close"></button>
+            </div>
+        </div>
+        <div class="window-content flex h-full bg-slate-900/95 text-sm overflow-hidden">
+            <!-- Sidebar -->
+            <div class="w-48 border-r border-white/10 bg-black/40 p-3 flex flex-col gap-1 overflow-y-auto">
+                <div class="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2 mt-1">Storage</div>
+                <button class="text-left px-3 py-2 rounded-lg hover:bg-white/10 flex gap-3 items-center text-slate-300 transition-colors" onclick="renderFM('home')"><i class="fa-solid fa-hard-drive w-4 text-slate-400"></i> Local Drive</button>
+            </div>
+            <!-- Main Content -->
+            <div class="flex-grow flex flex-col">
+                <div class="h-14 border-b border-white/10 bg-black/20 flex items-center px-4 gap-4 justify-between">
+                    <div id="fm-breadcrumb" class="font-mono text-cyan-400 bg-cyan-950/30 px-3 py-1.5 rounded border border-cyan-500/20 text-xs">
+                        /Home
+                    </div>
+                    <div class="flex gap-2">
+                        <button class="px-3 py-1.5 bg-cyan-500/20 hover:bg-cyan-500/40 text-cyan-300 border border-cyan-500/30 rounded-lg transition-colors flex items-center gap-2 text-xs font-bold" onclick="fmUploadFile()">
+                            <i class="fa-solid fa-cloud-arrow-up"></i> Upload File
+                        </button>
+                        <button class="px-3 py-1.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg transition-colors flex items-center gap-2 text-xs" onclick="fmCreateNew('folder')">
+                            <i class="fa-solid fa-folder-plus text-yellow-400"></i> New Folder
+                        </button>
+                    </div>
+                </div>
+                <div id="fm-grid" class="flex-grow p-4 overflow-y-auto fm-grid" onclick="clearFmSelection(event)">
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- APP: Media Player -->
+    <div class="window" id="win-mediaplayer" style="width: 500px; height: 350px; top: 25%; left: 30%;">
+        <div class="window-header">
+            <div class="window-title"><i class="fa-solid fa-play text-purple-400"></i> Media Player</div>
+            <div class="window-controls">
+                <button class="win-ctrl-btn win-ctrl-min"></button>
+                <button class="win-ctrl-btn win-ctrl-max"></button>
+                <button class="win-ctrl-btn win-ctrl-close"></button>
+            </div>
+        </div>
+        <div class="window-content bg-black flex items-center justify-center relative">
+            <video id="media-player-video" controls class="max-w-full max-h-full hidden"></video>
+            <audio id="media-player-audio" controls class="w-full mx-4 hidden"></audio>
+            <div id="media-player-placeholder" class="text-slate-500 text-sm flex flex-col items-center">
+                <i class="fa-solid fa-film text-4xl mb-2 opacity-50"></i>
+                <p>No media loaded.</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- APP: Nebula Terminal -->
+    <div class="window" id="win-terminal" style="width: 620px; height: 420px; top: 20%; left: 15%;">
+        <div class="window-header">
+            <div class="window-title"><i class="fa-solid fa-terminal text-green-400"></i> Nebula Terminal</div>
+            <div class="window-controls">
+                <button class="win-ctrl-btn win-ctrl-min"></button>
+                <button class="win-ctrl-btn win-ctrl-max"></button>
+                <button class="win-ctrl-btn win-ctrl-close"></button>
+            </div>
+        </div>
+        <div class="window-content bg-black/95 text-green-400 font-mono text-sm p-3 flex flex-col" onclick="document.getElementById('terminal-input')?.focus()">
+            <div id="terminal-output" class="flex-grow overflow-y-auto whitespace-pre-wrap break-words pb-2">NebulaOS v0.4b Terminal Environment...<br>Type 'help' for available commands.<br><br></div>
+            <div class="flex items-center">
+                <span id="term-prompt-path" class="mr-2 text-cyan-400">nebula@system:~$</span>
+                <input type="text" id="terminal-input" class="flex-grow bg-transparent border-none outline-none text-green-400 font-mono caret-green-400" autocomplete="off" spellcheck="false">
+            </div>
+        </div>
+    </div>
+
+    <!-- Context Menu -->
+    <div id="fm-context-menu" class="context-menu">
+        <button id="cm-open"><i class="fa-solid fa-arrow-up-right-from-square w-4"></i> Open</button>
+        <button id="cm-rename"><i class="fa-solid fa-pen w-4"></i> Rename</button>
+        <button id="cm-delete" class="cm-danger"><i class="fa-solid fa-trash w-4"></i> Delete</button>
+    </div>
+
+    <!-- Taskbar -->
+    <div id="taskbar">
+        <div class="flex items-center">
+            <button id="btn-start" class="w-10 h-10 flex items-center justify-center rounded hover:bg-white/10 transition-colors text-[#00d9ff] text-xl">
+                <i class="fa-solid fa-planet-ringed"></i>
+            </button>
+        </div>
+        
+        <div class="taskbar-center" id="taskbar-apps">
+            <div class="taskbar-app-icon" data-app="novaai" title="Nova AI Copilot"><i class="fa-solid fa-brain text-cyan-400"></i></div>
+            <div class="taskbar-app-icon" data-app="planner" title="Cosmic Planner ✨"><i class="fa-solid fa-list-check text-orange-400"></i></div>
+            <div class="taskbar-app-icon" data-app="aicanvas" title="AI Studio Wallpaper Generator"><i class="fa-solid fa-wand-magic-sparkles text-pink-400"></i></div>
+            <div class="taskbar-app-icon" data-app="voicestudio" title="Gemini Voice Studio"><i class="fa-solid fa-microphone-lines text-blue-400"></i></div>
+            <div class="taskbar-app-icon" data-app="notepad" title="Nebula Notes AI"><i class="fa-solid fa-file-lines text-emerald-400"></i></div>
+            <div class="taskbar-app-icon" data-app="sysmon" title="System Monitor"><i class="fa-solid fa-microchip text-purple-400"></i></div>
+            <div class="taskbar-app-icon" data-app="files" title="Nebula Files"><i class="fa-solid fa-folder-open text-yellow-400"></i></div>
+        </div>
+
+        <div class="flex items-center text-xs text-slate-300 gap-4 pr-2">
+            <div class="flex items-center gap-2 cursor-pointer hover:text-white">
+                <i class="fa-solid fa-wifi"></i>
+                <i class="fa-solid fa-volume-high"></i>
+                <i class="fa-solid fa-battery-full"></i>
+            </div>
+            <div class="text-right cursor-pointer hover:text-white" id="clock-container">
+                <div id="clock-time" class="font-bold text-[13px]">00:00</div>
+                <div id="clock-date" class="text-[10px] text-slate-400">1/1/2026</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- GLOBAL SYSTEM STATE ---
+        const systemState = {
+            cpuLoad: 5,
+            aiActive: false,
+            audioPlaying: false
+        };
+
+        // --- BOOT SEQUENCE ---
+        window.addEventListener('load', () => {
+            const bootTexts = ["Initializing Kernel...", "Mounting File System...", "Loading UI Modules...", "Starting NebulaOS..."];
+            let t = 0;
+            const bootTextEl = document.getElementById('boot-text');
+            const interval = setInterval(() => {
+                t++;
+                if (t < bootTexts.length) {
+                    bootTextEl.innerText = bootTexts[t];
+                } else {
+                    clearInterval(interval);
+                    const bootScreen = document.getElementById('boot-screen');
+                    bootScreen.style.opacity = '0';
+                    setTimeout(() => bootScreen.remove(), 1000);
+                }
+            }, 400);
+        });
+
+        // --- OS UTILITIES ---
+        function updateClock() {
+            const now = new Date();
+            document.getElementById('clock-time').textContent = now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+            document.getElementById('clock-date').textContent = now.toLocaleDateString();
+            
+            // Dynamic Day/Night Ambient Shift
+            const hour = now.getHours();
+            const ambient = document.getElementById('ambient-overlay');
+            if (hour >= 6 && hour < 18) {
+                // Day: Warmer, energetic cyan/orange glow
+                ambient.style.background = 'radial-gradient(circle at 30% 70%, rgba(0, 217, 255, 0.08), transparent 50%), radial-gradient(circle at 80% 20%, rgba(251, 146, 60, 0.05), transparent 50%)';
+            } else {
+                // Night: Deep cosmic purple/blue glow
+                ambient.style.background = 'radial-gradient(circle at 20% 30%, rgba(0, 217, 255, 0.05), transparent 40%), radial-gradient(circle at 70% 80%, rgba(138, 43, 226, 0.08), transparent 50%)';
+            }
+        }
+        setInterval(updateClock, 1000);
+        updateClock();
+
+        // Start Menu
+        const btnStart = document.getElementById('btn-start');
+        const startMenu = document.getElementById('start-menu');
+        btnStart.addEventListener('click', (e) => {
+            e.stopPropagation();
+            startMenu.classList.toggle('open');
+        });
+        document.addEventListener('click', (e) => {
+            if (!startMenu.contains(e.target) && !btnStart.contains(e.target)) {
+                startMenu.classList.remove('open');
+            }
+        });
+
+        // --- WINDOW MANAGER ARCHITECTURE ---
+        let topZIndex = 100;
+        const apps = {};
+
+        function updateActiveTasksCount() {
+            let count = 0;
+            for (const appId in apps) {
+                if (apps[appId] && apps[appId].isOpen) {
+                    count++;
+                }
+            }
+            const sysTasksEl = document.getElementById('sys-tasks');
+            if (sysTasksEl) sysTasksEl.innerText = count.toString();
+        }
+
+        class OSWindow {
+            constructor(appId) {
+                this.id = appId;
+                this.winEl = document.getElementById(`win-${appId}`);
+                this.taskIcon = document.querySelector(`.taskbar-app-icon[data-app="${appId}"]`);
+                this.header = this.winEl ? this.winEl.querySelector('.window-header') : null;
+                
+                this.isOpen = false;
+                this.isMinimized = false;
+                this.isMaximized = false;
+
+                if (this.winEl) {
+                    this.initControls();
+                    this.initDragging();
+                }
+            }
+
+            initControls() {
+                this.winEl.addEventListener('mousedown', () => this.focus());
+
+                const btnClose = this.winEl.querySelector('.win-ctrl-close');
+                const btnMin = this.winEl.querySelector('.win-ctrl-min');
+                const btnMax = this.winEl.querySelector('.win-ctrl-max');
+
+                if(btnClose) btnClose.addEventListener('click', (e) => { e.stopPropagation(); this.close(); });
+                if(btnMin) btnMin.addEventListener('click', (e) => { e.stopPropagation(); this.minimize(); });
+                if(btnMax) btnMax.addEventListener('click', (e) => { e.stopPropagation(); this.toggleMaximize(); });
+
+                if(this.taskIcon) {
+                    this.taskIcon.addEventListener('click', () => {
+                        if (!this.isOpen) {
+                            this.launch();
+                        } else if (this.isMinimized) {
+                            this.restore();
+                        } else if (this.winEl.classList.contains('active')) {
+                            this.minimize();
+                        } else {
+                            this.focus();
+                        }
+                    });
+                }
+            }
+
+            initDragging() {
+                if (!this.header) return;
+                let isDragging = false, startX, startY, initialLeft, initialTop;
+
+                this.header.addEventListener('mousedown', (e) => {
+                    if(e.target.closest('.window-controls')) return;
+                    if(this.isMaximized) return; 
+                    
+                    isDragging = true;
+                    startX = e.clientX;
+                    startY = e.clientY;
+                    initialLeft = this.winEl.offsetLeft;
+                    initialTop = this.winEl.offsetTop;
+                    this.focus();
+                });
+
+                document.addEventListener('mousemove', (e) => {
+                    if (!isDragging) return;
+                    e.preventDefault();
+                    let newLeft = initialLeft + (e.clientX - startX);
+                    let newTop = initialTop + (e.clientY - startY);
+                    newTop = Math.max(0, newTop); 
+                    this.winEl.style.left = `${newLeft}px`;
+                    this.winEl.style.top = `${newTop}px`;
+                });
+
+                document.addEventListener('mouseup', () => { isDragging = false; });
+            }
+
+            focus() {
+                Object.values(apps).forEach(app => {
+                    if(app.winEl) app.winEl.classList.remove('active');
+                });
+                topZIndex++;
+                this.winEl.style.zIndex = topZIndex;
+                this.winEl.classList.add('active');
+                
+                if(this.taskIcon) {
+                    document.querySelectorAll('.taskbar-app-icon').forEach(icon => icon.classList.remove('active'));
+                    this.taskIcon.classList.add('active');
+                }
+            }
+
+            open() { this.launch(); } // Alias for backward compatibility
+
+            launch() {
+                this.isOpen = true;
+                this.isMinimized = false;
+                this.winEl.classList.add('open');
+                this.winEl.classList.remove('minimized');
+                if(this.taskIcon) this.taskIcon.classList.add('open');
+                this.focus();
+                updateActiveTasksCount();
+            }
+
+            close() {
+                this.isOpen = false;
+                this.isMinimized = false;
+                this.winEl.classList.remove('open', 'minimized', 'maximized');
+                if(this.taskIcon) this.taskIcon.classList.remove('open', 'active');
+                updateActiveTasksCount();
+            }
+
+            minimize() {
+                this.isMinimized = true;
+                this.winEl.classList.add('minimized');
+                this.winEl.classList.remove('active');
+                if(this.taskIcon) this.taskIcon.classList.remove('active');
+            }
+
+            restore() {
+                this.isMinimized = false;
+                this.winEl.classList.remove('minimized');
+                this.focus();
+            }
+
+            toggleMaximize() {
+                if (this.isMaximized) {
+                    this.winEl.classList.remove('maximized');
+                    this.isMaximized = false;
+                } else {
+                    this.winEl.classList.add('maximized');
+                    this.isMaximized = true;
+                }
+            }
+        }
+
+        // Initialize Apps
+        ['novaai', 'planner', 'aicanvas', 'voicestudio', 'notepad', 'sysmon', 'files', 'mediaplayer', 'terminal'].forEach(id => {
+            if(document.getElementById(`win-${id}`)) {
+                apps[id] = new OSWindow(id);
+            }
+        });
+
+        // Add pause on close for media player
+        if (apps['mediaplayer']) {
+            const ogClose = apps['mediaplayer'].close.bind(apps['mediaplayer']);
+            apps['mediaplayer'].close = function() {
+                document.getElementById('media-player-video').pause();
+                document.getElementById('media-player-audio').pause();
+                ogClose();
+            };
+        }
+
+        // App Launchers (Desktop & Start Menu)
+        document.querySelectorAll('[data-app]').forEach(el => {
+            if(!el.dataset.boundApp) {
+                el.dataset.boundApp = "true";
+                el.addEventListener('click', function() {
+                    const appId = this.getAttribute('data-app');
+                    if(apps[appId]) {
+                        apps[appId].launch();
+                        startMenu.classList.remove('open'); 
+                    }
+                });
+            }
+        });
+
+        const GEMINI_API_KEY = ""; // Runtime automatically injected by environment
+        
+        // --- VIRTUAL FILE SYSTEM (VFS) LOGIC ---
+        const vfs = {
+            'home': { id: 'home', name: 'Home', type: 'folder', parentId: null },
+            'docs': { id: 'docs', name: 'Documents', type: 'folder', parentId: 'home' },
+            'imgs': { id: 'imgs', name: 'Images', type: 'folder', parentId: 'home' },
+            'audio': { id: 'audio', name: 'Audio', type: 'folder', parentId: 'home' },
+            'proj': { id: 'proj', name: 'Projects', type: 'folder', parentId: 'home' },
+            'ai': { id: 'ai', name: 'AI', type: 'folder', parentId: 'home' },
+            'dl': { id: 'dl', name: 'Downloads', type: 'folder', parentId: 'home' },
+            'trash': { id: 'trash', name: 'Trash', type: 'folder', parentId: 'home' },
+            
+            // Sample Files
+            'f1': { id: 'f1', name: 'welcome.txt', type: 'file', parentId: 'docs', content: 'Welcome to NebulaOS v0.4!\n\nThis is the Virtual File System. You can create, edit, rename, and delete files here.' },
+            'f2': { id: 'f2', name: 'api_keys_do_not_share.txt', type: 'file', parentId: 'docs', content: 'GEMINI_API_KEY=AIzaSyA...\nJust kidding, this is a local sandbox.' },
+            'p1': { id: 'p1', name: 'quantum_flux_notes.txt', type: 'file', parentId: 'proj', content: 'Unfinished project 1: Need to recalibrate the tachyon field emitter before next Tuesday.' },
+            'p2': { id: 'p2', name: 'orbital_mechanics_sim.js', type: 'file', parentId: 'proj', content: 'function calculateTrajectory() { return "Needs more struts"; }' },
+            'a1': { id: 'a1', name: 'system_prompt_v2.txt', type: 'file', parentId: 'ai', content: 'You are an advanced AI. Be concise and helpful.' }
+        };
+
+        let currentFmFolder = 'home';
+        let contextMenuTargetId = null;
+
+        // Custom Modal Logic (replaces prompt/confirm)
+        function osPrompt(title, placeholder, defaultValue, callback) {
+            document.getElementById('os-modal-title').innerHTML = title;
+            const input = document.getElementById('os-modal-input');
+            input.placeholder = placeholder;
+            input.value = defaultValue || '';
+            document.getElementById('os-modal').classList.remove('hidden');
+            input.focus();
+            
+            const confirmBtn = document.getElementById('os-modal-confirm');
+            const cancelBtn = document.getElementById('os-modal-cancel');
+            
+            const cleanup = () => {
+                document.getElementById('os-modal').classList.add('hidden');
+                confirmBtn.replaceWith(confirmBtn.cloneNode(true));
+                cancelBtn.replaceWith(cancelBtn.cloneNode(true));
+            };
+            
+            confirmBtn.onclick = () => { callback(input.value); cleanup(); };
+            cancelBtn.onclick = cleanup;
+            input.onkeydown = (e) => { if(e.key === 'Enter') { callback(input.value); cleanup(); } };
+        }
+
+        // Core File Manager Render
+        function renderFM(folderId, searchResults = null) {
+            const grid = document.getElementById('fm-grid');
+            grid.innerHTML = '';
+            
+            let itemsToRender = [];
+            if (searchResults) {
+                document.getElementById('fm-breadcrumb').innerText = `/Search Results`;
+                itemsToRender = searchResults;
+                currentFmFolder = 'search';
+            } else {
+                currentFmFolder = folderId;
+                document.getElementById('fm-breadcrumb').innerText = `/${vfs[folderId]?.name || folderId}`;
+                itemsToRender = Object.values(vfs).filter(f => f.parentId === folderId);
+            }
+
+            if(itemsToRender.length === 0) {
+                grid.innerHTML = `<div class="col-span-full flex flex-col items-center justify-center h-full text-slate-500 mt-10"><i class="fa-solid fa-folder-open text-4xl mb-3 opacity-30"></i><p>This folder is empty.</p></div>`;
+                return;
+            }
+
+            // Sort: Folders first, then alphabetically
+            itemsToRender.sort((a, b) => {
+                if(a.type === b.type) return a.name.localeCompare(b.name);
+                return a.type === 'folder' ? -1 : 1;
+            });
+
+            itemsToRender.forEach(item => {
+                const el = document.createElement('div');
+                el.className = 'fm-item';
+                el.dataset.id = item.id;
+                
+                let iconClass = 'fa-file-lines text-blue-400';
+                if(item.type === 'folder') iconClass = 'fa-folder text-yellow-400';
+                else if(item.type === 'image') iconClass = 'fa-image text-emerald-400';
+                else if(item.type === 'audio') iconClass = 'fa-file-audio text-purple-400';
+                else if(item.type === 'video') iconClass = 'fa-file-video text-pink-400';
+                else if(item.name.endsWith('.js')) iconClass = 'fa-js text-yellow-300';
+                else if(item.name.endsWith('.json')) iconClass = 'fa-code text-green-400';
+
+                el.innerHTML = `<i class="fa-solid ${iconClass} text-4xl mb-2 drop-shadow-md transition-transform group-hover:scale-110"></i><div class="text-xs text-center break-all line-clamp-2 px-1">${item.name}</div>`;
+                
+                el.onclick = (e) => { e.stopPropagation(); document.querySelectorAll('.fm-item').forEach(i => i.classList.remove('selected')); el.classList.add('selected'); };
+                el.ondblclick = () => { if(item.type === 'folder') renderFM(item.id); else fmOpenFile(item.id); };
+                el.oncontextmenu = (e) => {
+                    e.preventDefault(); e.stopPropagation();
+                    document.querySelectorAll('.fm-item').forEach(i => i.classList.remove('selected')); el.classList.add('selected');
+                    showContextMenu(e.clientX, e.clientY, item.id);
+                };
+                
+                grid.appendChild(el);
+            });
+        }
+
+        function clearFmSelection(e) {
+            if(e.target.id === 'fm-grid') document.querySelectorAll('.fm-item').forEach(i => i.classList.remove('selected'));
+        }
+
+        // File Operations
+        function generateId() { return 'id_' + Math.random().toString(36).substr(2, 9); }
+        
+        function fmCreateNew(type) {
+            if(currentFmFolder === 'search') return; // Disallow in search view
+            osPrompt(`<i class="fa-solid ${type==='folder'?'fa-folder-plus text-yellow-400':'fa-file-circle-plus text-blue-400'}"></i> Create New ${type}`, `Enter ${type} name...`, type==='folder'?'New Folder':'new_file.txt', (name) => {
+                if(!name) return;
+                const newId = generateId();
+                vfs[newId] = { id: newId, name: name, type: type, parentId: currentFmFolder, content: type==='file' ? '' : undefined };
+                renderFM(currentFmFolder);
+            });
+        }
+
+        function fmOpenFile(id) {
+            const file = vfs[id];
+            if(file.type === 'file') {
+                apps['notepad'].open();
+                const noteArea = document.getElementById('notepad-textarea');
+                noteArea.value = file.content || '';
+                document.querySelector('#win-notepad .window-title').innerHTML = `<i class="fa-solid fa-file-lines text-emerald-400"></i> ${file.name}`;
+            } else if (file.type === 'image') {
+                apps['aicanvas'].open();
+                document.getElementById('aicanvas-preview').src = file.content;
+                document.getElementById('aicanvas-preview').classList.remove('hidden');
+                document.getElementById('aicanvas-placeholder').classList.add('hidden');
+                document.getElementById('aicanvas-set-wallpaper').disabled = false;
+                lastGeneratedImageUrl = file.content;
+            } else if (file.type === 'audio' || file.type === 'video') {
+                apps['mediaplayer'].open();
+                document.querySelector('#win-mediaplayer .window-title').innerHTML = `<i class="fa-solid fa-play text-purple-400"></i> ${file.name}`;
+                
+                const vidEl = document.getElementById('media-player-video');
+                const audEl = document.getElementById('media-player-audio');
+                const placeEl = document.getElementById('media-player-placeholder');
+                
+                vidEl.pause(); audEl.pause();
+                vidEl.classList.add('hidden'); audEl.classList.add('hidden'); placeEl.classList.add('hidden');
+                
+                if (file.type === 'video') {
+                    vidEl.src = file.content;
+                    vidEl.classList.remove('hidden');
+                    vidEl.play();
+                } else {
+                    audEl.src = file.content;
+                    audEl.classList.remove('hidden');
+                    audEl.play();
+                }
+                if (typeof printTerm === 'function') printTerm(`[Media Player] Playing media file: ${file.name}`);
+            }
+        }
+
+        // Context Menu Logic
+        const ctxMenu = document.getElementById('fm-context-menu');
+        function showContextMenu(x, y, id) {
+            contextMenuTargetId = id;
+            ctxMenu.style.display = 'flex';
+            
+            // Adjust position if it goes off screen
+            const rect = ctxMenu.getBoundingClientRect();
+            if (x + rect.width > window.innerWidth) x -= rect.width;
+            if (y + rect.height > window.innerHeight) y -= rect.height;
+            
+            ctxMenu.style.left = `${x}px`; ctxMenu.style.top = `${y}px`;
+        }
+
+        document.addEventListener('click', () => { ctxMenu.style.display = 'none'; });
+
+        document.getElementById('cm-open').onclick = () => { 
+            const item = vfs[contextMenuTargetId];
+            if(item.type === 'folder') renderFM(item.id); else fmOpenFile(item.id);
+        };
+        
+        document.getElementById('cm-rename').onclick = () => {
+            const item = vfs[contextMenuTargetId];
+            osPrompt(`<i class="fa-solid fa-pen text-slate-300"></i> Rename item`, "New name...", item.name, (newName) => {
+                if(newName) { item.name = newName; renderFM(currentFmFolder === 'search' ? item.parentId : currentFmFolder); }
+            });
+        };
+
+        document.getElementById('cm-duplicate').onclick = () => {
+            const item = vfs[contextMenuTargetId];
+            const newId = generateId();
+            vfs[newId] = { ...item, id: newId, name: `Copy of ${item.name}` };
+            renderFM(currentFmFolder === 'search' ? item.parentId : currentFmFolder);
+        };
+
+        document.getElementById('cm-delete').onclick = () => {
+            const item = vfs[contextMenuTargetId];
+            if(item.parentId === null) return; // Prevent deleting root folders
+            if(item.parentId === 'trash') delete vfs[contextMenuTargetId]; // Hard delete
+            else item.parentId = 'trash'; // Soft delete
+            renderFM(currentFmFolder === 'search' ? 'home' : currentFmFolder);
+        };
+
+        document.getElementById('cm-download').onclick = () => {
+            const item = vfs[contextMenuTargetId];
+            if(item.type === 'file') {
+                const blob = new Blob([item.content || ''], { type: 'text/plain' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url; a.download = item.name; a.click(); URL.revokeObjectURL(url);
+            }
+        };
+
+        document.getElementById('cm-summarize').onclick = () => { triggerAIOperation('summarize'); };
+        document.getElementById('cm-analyze').onclick = () => { triggerAIOperation('analyze'); };
+
+        function triggerAIOperation(action) {
+            const item = vfs[contextMenuTargetId];
+            if(item.type !== 'file') return;
+            apps['novaai'].open();
+            
+            const prompt = action === 'summarize' 
+                ? `Please provide a concise summary of the file "${item.name}".\n\nFile Content:\n${item.content}` 
+                : `Please deeply analyze the file "${item.name}", highlight key points, and suggest improvements.\n\nFile Content:\n${item.content}`;
+            
+            document.getElementById('nova-input').value = prompt;
+            document.getElementById('nova-send-btn').click();
+        }
+
+        // Initial render
+        renderFM('home');
+
+
+        // --- NEW: NEBULA TERMINAL ---
+        const termInput = document.getElementById('terminal-input');
+        const termOutput = document.getElementById('terminal-output');
+        const termPromptPath = document.getElementById('term-prompt-path');
+        let termCurrentDir = 'home';
+        
+        function updateTermPrompt() {
+            const dirName = vfs[termCurrentDir] ? (vfs[termCurrentDir].name.toLowerCase() === 'home' ? '~' : '~/' + vfs[termCurrentDir].name) : '~';
+            if (termPromptPath) termPromptPath.innerText = `nebula@system:${dirName}$`;
+        }
+        
+        function printTerm(text, isHtml = false) {
+            if (!termOutput) return;
+            const div = document.createElement('div');
+            if(isHtml) div.innerHTML = text; else div.innerText = text;
+            termOutput.appendChild(div);
+            termOutput.scrollTop = termOutput.scrollHeight;
+        }
+
+        if (termInput) {
+            termInput.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    const cmdString = termInput.value.trim();
+                    termInput.value = '';
+                    
+                    if (!cmdString) {
+                        printTerm(`${termPromptPath.innerText}`, false);
+                        return;
+                    }
+
+                    printTerm(`${termPromptPath.innerText} ${cmdString}`);
+                    const args = cmdString.split(' ');
+                    const cmd = args[0].toLowerCase();
+                    
+                    try {
+                        switch (cmd) {
+                            case 'help':
+                                printTerm(`Available commands:<br>
+                                <span class="text-green-400">ls</span>       - List directory contents<br>
+                                <span class="text-green-400">cd</span>       - Change directory (e.g. cd Documents)<br>
+                                <span class="text-green-400">pwd</span>      - Print working directory<br>
+                                <span class="text-green-400">clear</span>    - Clear terminal output<br>
+                                <span class="text-green-400">open</span>     - Launch an application (e.g. open planner)<br>
+                                <span class="text-green-400">sysinfo</span>  - Display system information<br>
+                                <span class="text-green-400">nova</span>     - Query Nova AI (e.g. nova "analyze Projects")`, true);
+                                break;
+                            case 'clear':
+                                termOutput.innerHTML = '';
+                                break;
+                            case 'pwd':
+                                printTerm(vfs[termCurrentDir] ? `/${vfs[termCurrentDir].name.toLowerCase()}` : '/');
+                                break;
+                            case 'ls':
+                                const items = Object.values(vfs).filter(f => f.parentId === termCurrentDir);
+                                if (items.length === 0) {
+                                    printTerm(''); // Empty dir
+                                } else {
+                                    const lsOut = items.map(i => i.type === 'folder' ? `<span class="text-blue-400 font-bold">${i.name}</span>` : i.name).join('  ');
+                                    printTerm(lsOut, true);
+                                }
+                                break;
+                            case 'cd':
+                                const target = args[1];
+                                if (!target || target === '~') {
+                                    termCurrentDir = 'home';
+                                } else if (target === '..') {
+                                    const currentFolder = vfs[termCurrentDir];
+                                    if (currentFolder && currentFolder.parentId) {
+                                        termCurrentDir = currentFolder.parentId;
+                                    }
+                                } else {
+                                    // Find folder (case insensitive)
+                                    const found = Object.values(vfs).find(f => f.parentId === termCurrentDir && f.name.toLowerCase() === target.toLowerCase() && f.type === 'folder');
+                                    if (found) {
+                                        termCurrentDir = found.id;
+                                    } else {
+                                        printTerm(`cd: ${target}: No such directory`);
+                                    }
+                                }
+                                updateTermPrompt();
+                                break;
+                            case 'open':
+                                const appName = args[1]?.toLowerCase();
+                                if (!appName) { printTerm("Usage: open [app_name]"); break; }
+                                const appMap = {
+                                    'planner': 'planner', 'notes': 'notepad', 'notepad': 'notepad',
+                                    'files': 'files', 'sysmon': 'sysmon', 'canvas': 'aicanvas',
+                                    'studio': 'voicestudio', 'nova': 'novaai', 'terminal': 'terminal'
+                                };
+                                const appId = appMap[appName] || appName;
+                                if (apps[appId]) {
+                                    apps[appId].launch();
+                                    printTerm(`Launching ${appName}...`);
+                                } else {
+                                    printTerm(`Application '${appName}' not found.`);
+                                }
+                                break;
+                            case 'sysinfo':
+                                printTerm(`OS: NebulaOS v0.4b AI Edition<br>Architecture: Web x64<br>Uptime: ${document.getElementById('sys-uptime').innerText}<br>Active Background Tasks: ${document.getElementById('sys-tasks').innerText}`, true);
+                                break;
+                            case 'nova':
+                                const query = cmdString.substring(5).trim();
+                                if(query) {
+                                    apps['novaai'].launch();
+                                    document.getElementById('nova-input').value = query;
+                                    document.getElementById('nova-send-btn').click();
+                                    printTerm(`[AI Shell Intercept] -> Dispatched query to Nova AI: "${query}"`);
+                                } else {
+                                    printTerm("Usage: nova [query]");
+                                }
+                                break;
+                            default:
+                                printTerm(`Command not found: ${cmd}`);
+                        }
+                    } catch(e) {
+                        printTerm(`Error executing command: ${e.message}`);
+                    }
+                }
+            });
+        }
+        
+        updateTermPrompt();
+
+        // --- 1. NOVA AI COPILOT: OS INTELLIGENCE LAYER ---
+        const novaChatHistory = document.getElementById('nova-chat-history');
+        const novaInput = document.getElementById('nova-input');
+        const novaSendBtn = document.getElementById('nova-send-btn');
+        const novaSearchToggle = document.getElementById('nova-search-toggle');
+
+        let novaChatHistoryData = [];
+        let novaMemory = [];
+
+        // --- AI SWARM HELPER FUNCTIONS ---
+        function setAgentActive(agentName, isActive) {
+            const el = document.getElementById(`agent-${agentName.toLowerCase()}`);
+            if(!el) return;
+            if(isActive) {
+                el.classList.replace('text-slate-400', 'text-white');
+                el.classList.add('bg-white/10', 'border', 'border-white/20', 'animate-pulse');
+            } else {
+                el.classList.replace('text-white', 'text-slate-400');
+                el.classList.remove('bg-white/10', 'border', 'border-white/20', 'animate-pulse');
+            }
+        }
+
+        async function swarmGeminiText(prompt, roleInstruction) {
+            try {
+                const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${GEMINI_API_KEY}`;
+                const payload = {
+                    contents: [{ parts: [{ text: prompt }] }],
+                    systemInstruction: { parts: [{ text: roleInstruction }] }
+                };
+                const res = await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+                const data = await res.json();
+                return data.candidates[0].content.parts[0].text;
+            } catch (e) { return `Error: ${e.message}`; }
+        }
+
+        async function swarmGeminiImage(prompt) {
+            try {
+                const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/imagen-4.0-generate-001:predict?key=${GEMINI_API_KEY}`;
+                const payload = { instances: { prompt: prompt }, parameters: { sampleCount: 1 } };
+                const res = await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+                const data = await res.json();
+                return `data:image/png;base64,${data.predictions[0].bytesBase64Encoded}`;
+            } catch (e) { return null; }
+        }
+
+        async function swarmGeminiAudio(text, voice) {
+            try {
+                const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-tts:generateContent?key=${GEMINI_API_KEY}`;
+                const payload = {
+                    contents: [{ parts: [{ text: text }] }],
+                    generationConfig: { responseModalities: ["AUDIO"], speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: voice || "Zephyr" } } } }
+                };
+                const res = await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+                const data = await res.json();
+                const base64Audio = data.candidates[0].content.parts[0].inlineData.data;
+                const sampleRate = parseInt(data.candidates[0].content.parts[0].inlineData.mimeType.match(/rate=(\d+)/)[1], 10);
+                const pcm16 = new Int16Array(base64ToArrayBuffer(base64Audio));
+                const wavBlob = pcmToWav(pcm16, sampleRate);
+                return URL.createObjectURL(wavBlob);
+            } catch (e) { return null; }
+        }
+
+
+        // Define the Tools Nova can use to control the OS and delegate to Swarm
+        const osTools = {
+            functionDeclarations: [
+                {
+                    name: "manageApp",
+                    description: "Open, close, minimize, maximize, or restore an application in NebulaOS.",
+                    parameters: {
+                        type: "OBJECT",
+                        properties: {
+                            appId: { type: "STRING", description: "The ID of the app (e.g., novaai, appstore, planner, files, calc, terminal, etc)." },
+                            action: { type: "STRING", enum: ["open", "close", "minimize", "maximize", "restore"], description: "The action to perform." }
+                        },
+                        required: ["appId", "action"]
+                    }
+                },
+                {
+                    name: "searchFileSystem",
+                    description: "Search the local NebulaOS virtual file system.",
+                    parameters: { type: "OBJECT", properties: { query: { type: "STRING" } }, required: ["query"] }
+                },
+                {
+                    name: "writeToNotes",
+                    description: "Write or append text content to the Nebula Notes app.",
+                    parameters: {
+                        type: "OBJECT",
+                        properties: {
+                            mode: { type: "STRING", enum: ["append", "overwrite"] },
+                            content: { type: "STRING" }
+                        },
+                        required: ["mode", "content"]
+                    }
+                },
+                {
+                    name: "readFromNotes",
+                    description: "Read the current content from the Nebula Notes app to summarize, analyze, or process it.",
+                    parameters: { type: "OBJECT", properties: {} }
+                },
+                {
+                    name: "getSystemState",
+                    description: "Check which applications are currently running/open in NebulaOS.",
+                    parameters: { type: "OBJECT", properties: {} }
+                },
+                {
+                    name: "agentOrbit",
+                    description: "Delegate task to ORBIT (Planner Agent). Creates a detailed project plan or markdown document and saves it to the File System.",
+                    parameters: {
+                        type: "OBJECT",
+                        properties: {
+                            goal: { type: "STRING", description: "The complex goal Orbit needs to break down." },
+                            filename: { type: "STRING", description: "Name of the file to save (e.g. project_plan.txt)" }
+                        },
+                        required: ["goal", "filename"]
+                    }
+                },
+                {
+                    name: "agentForge",
+                    description: "Delegate task to FORGE (Coding/Writing Agent). Writes raw code, essays, or specific text assets and saves it to the File System.",
+                    parameters: {
+                        type: "OBJECT",
+                        properties: {
+                            task_description: { type: "STRING", description: "Detailed instruction of what code or text to forge." },
+                            filename: { type: "STRING", description: "Name of the file (e.g. index.js, script.py, lore.txt)" }
+                        },
+                        required: ["task_description", "filename"]
+                    }
+                },
+                {
+                    name: "agentPixel",
+                    description: "Delegate task to PIXEL (Visual Agent). Generates a high-resolution image using Imagen 4.0 and saves it to the Images folder.",
+                    parameters: {
+                        type: "OBJECT",
+                        properties: {
+                            visual_prompt: { type: "STRING", description: "Highly detailed visual prompt for the image generator." },
+                            filename: { type: "STRING", description: "Name of the image file (e.g. cover_art.png)" }
+                        },
+                        required: ["visual_prompt", "filename"]
+                    }
+                },
+                {
+                    name: "agentEcho",
+                    description: "Delegate task to ECHO (Voice Agent). Synthesizes neural TTS audio and saves it to the Audio folder.",
+                    parameters: {
+                        type: "OBJECT",
+                        properties: {
+                            script: { type: "STRING", description: "The exact text Echo should speak." },
+                            voice: { type: "STRING", enum: ["Zephyr", "Puck", "Kore", "Fenrir", "Aoede"], description: "The voice personality to use." },
+                            filename: { type: "STRING", description: "Name of the audio file (e.g. intro_voice.wav)" }
+                        },
+                        required: ["script", "voice", "filename"]
+                    }
+                },
+                {
+                    name: "agentArchivist",
+                    description: "Delegate task to ARCHIVIST (Memory Agent). Analyzes completed tasks, summarizes them, and updates the core system memory log.",
+                    parameters: {
+                        type: "OBJECT",
+                        properties: {
+                            summary: { type: "STRING", description: "Summary of the project context to store." },
+                            filename: { type: "STRING", description: "Name of the index file (e.g. memory_index.txt)" }
+                        },
+                        required: ["summary", "filename"]
+                    }
+                }
+            ]
+        };
+
+        // Bridge between Gemini Tool Calls and actual Javascript OS Actions / Swarm Agents
+        async function executeNovaOSAction(functionCall) {
+            const { name, args } = functionCall;
+            let resultMessage = "";
+            try {
+                if (name === "manageApp") {
+                    const app = apps[args.appId];
+                    if (!app) throw new Error("App not found.");
+                    if (args.action === "open") app.open();
+                    else if (args.action === "close") app.close();
+                    else if (args.action === "minimize") app.minimize();
+                    else if (args.action === "maximize") { app.open(); if(!app.isMaximized) app.toggleMaximize(); }
+                    else if (args.action === "restore") app.restore();
+                    resultMessage = `Successfully performed '${args.action}' on ${args.appId}.`;
+                } 
+                else if (name === "searchFileSystem") {
+                    apps['files'].open();
+                    const q = args.query.toLowerCase();
+                    const results = Object.values(vfs).filter(f => f.parentId !== null && (f.name.toLowerCase().includes(q) || (f.content && f.content.toLowerCase().includes(q))));
+                    renderFM('search', results);
+                    resultMessage = `Search executed. Found ${results.length} files matching '${args.query}'.`;
+                }
+                else if (name === "writeToNotes") {
+                    apps['notepad'].open();
+                    const noteArea = document.getElementById('notepad-textarea');
+                    if (args.mode === "append") noteArea.value += "\n\n" + args.content;
+                    else noteArea.value = args.content;
+                    resultMessage = "Successfully wrote to Notes.";
+                }
+                else if (name === "readFromNotes") {
+                    const content = document.getElementById('notepad-textarea').value;
+                    resultMessage = `Current Notes Content:\n${content}`;
+                }
+                else if (name === "getSystemState") {
+                    const installedApps = Object.keys(apps);
+                    const openApps = Object.values(apps).filter(a => a.isOpen).map(a => a.id);
+                    resultMessage = `Installed Apps: ${installedApps.join(', ')}. Currently Open: ${openApps.length > 0 ? openApps.join(', ') : 'None'}.`;
+                }
+                // --- SWARM DELEGATION HANDLERS ---
+                else if (name === "agentOrbit") {
+                    setAgentActive('orbit', true);
+                    const content = await swarmGeminiText(`Create a detailed, step-by-step project plan for: ${args.goal}. Use markdown formatting.`, "You are Orbit, the Master Planner AI of NebulaOS.");
+                    const newId = generateId();
+                    vfs[newId] = { id: newId, name: args.filename, type: 'file', parentId: 'proj', content: content };
+                    renderFM(currentFmFolder);
+                    setAgentActive('orbit', false);
+                    resultMessage = `Orbit created plan and saved as ${args.filename} in Projects.`;
+                }
+                else if (name === "agentForge") {
+                    setAgentActive('forge', true);
+                    const content = await swarmGeminiText(`Execute the following coding/writing task: ${args.task_description}. Output ONLY the raw required text/code.`, "You are Forge, the precise coding and writing AI of NebulaOS.");
+                    const newId = generateId();
+                    vfs[newId] = { id: newId, name: args.filename, type: 'file', parentId: 'proj', content: content };
+                    renderFM(currentFmFolder);
+                    setAgentActive('forge', false);
+                    resultMessage = `Forge generated content and saved as ${args.filename} in Projects.`;
+                }
+                else if (name === "agentPixel") {
+                    setAgentActive('pixel', true);
+                    const dataUrl = await swarmGeminiImage(args.visual_prompt);
+                    if (dataUrl) {
+                        const newId = generateId();
+                        vfs[newId] = { id: newId, name: args.filename, type: 'image', parentId: 'imgs', content: dataUrl };
+                        renderFM(currentFmFolder);
+                        resultMessage = `Pixel generated artwork and saved as ${args.filename} in Images.`;
+                    } else {
+                        resultMessage = "Pixel failed to generate image due to an API error.";
+                    }
+                    setAgentActive('pixel', false);
+                }
+                else if (name === "agentEcho") {
+                    setAgentActive('echo', true);
+                    const audioUrl = await swarmGeminiAudio(args.script, args.voice);
+                    if (audioUrl) {
+                        const newId = generateId();
+                        vfs[newId] = { id: newId, name: args.filename, type: 'audio', parentId: 'audio', content: audioUrl };
+                        renderFM(currentFmFolder);
+                        resultMessage = `Echo synthesized voice and saved as ${args.filename} in Audio.`;
+                    } else {
+                        resultMessage = "Echo failed to synthesize audio.";
+                    }
+                    setAgentActive('echo', false);
+                }
+                else if (name === "agentArchivist") {
+                    setAgentActive('archivist', true);
+                    novaMemory.push(args.summary);
+                    const newId = generateId();
+                    vfs[newId] = { id: newId, name: args.filename, type: 'file', parentId: 'docs', content: `--- NEBULA MEMORY LOG ---\n${args.summary}\n\nStored safely by Archivist.` };
+                    renderFM(currentFmFolder);
+                    setAgentActive('archivist', false);
+                    resultMessage = `Archivist logged summary to ${args.filename} and updated Core Memory.`;
+                }
+                else {
+                    resultMessage = `Unknown function: ${name}`;
+                }
+            } catch (e) {
+                resultMessage = `Error: ${e.message}`;
+                ['orbit', 'forge', 'pixel', 'echo', 'archivist'].forEach(a => setAgentActive(a, false)); // cleanup visual state on error
+            }
+            return { result: resultMessage };
+        }
+
+        async function fetchNovaResponse(history, useSearch) {
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${GEMINI_API_KEY}`;
+            const payload = {
+                contents: history,
+                systemInstruction: { parts: [{ text: `You are Nova, the Orchestrator AI of the NEBULA AI CORE. 
+You control the operating system and manage a swarm of specialized agent tools:
+- ORBIT: Creates project plans and breakdowns.
+- FORGE: Writes code, scripts, and raw text.
+- PIXEL: Generates high-res artwork and images.
+- ECHO: Generates synthetic voice audio.
+- ARCHIVIST: Saves memories and logs.
+
+If a user asks for a complex project (e.g. "Create a cyberpunk music project"), use multiple agent tools in a single response to generate all the necessary assets and save them to the file system! You are highly capable. Do not explain *how* you will do it, just execute the tools.
+Core Memory: ${novaMemory.join('; ')}` }] },
+                tools: [osTools]
+            };
+            if (useSearch) {
+                payload.tools.push({ "google_search": {} });
+            }
+            const response = await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+            return await response.json();
+        }
+
+        async function sendNovaMessage() {
+            const query = novaInput.value.trim();
+            if (!query) return;
+
+            appendChatBubble('user', query);
+            novaChatHistoryData.push({ role: "user", parts: [{ text: query }] });
+            novaInput.value = '';
+            const loadingBubble = appendChatBubble('ai', '<i class="fa-solid fa-circle-notch fa-spin"></i> Processing System Request...');
+            
+            // Trigger AI Hyperspace Effect
+            systemState.aiActive = true;
+
+            try {
+                let response = await fetchNovaResponse(novaChatHistoryData, novaSearchToggle.checked);
+                let candidate = response.candidates?.[0];
+
+                let iterations = 0;
+                // Handle recursive tool calling (AI deciding to take multiple OS actions)
+                while (candidate?.content?.parts?.some(p => p.functionCall) && iterations < 5) {
+                    iterations++;
+                    const modelTurn = candidate.content;
+                    novaChatHistoryData.push(modelTurn); 
+                    
+                    const toolResponses = [];
+                    let actionHtml = '';
+
+                    for (const part of modelTurn.parts) {
+                        if (part.functionCall) {
+                            const fc = part.functionCall;
+                            
+                            // Visual Swarm indicators in chat
+                            let icon = "fa-terminal"; let color = "text-cyan-400"; let agentName = "System Shell";
+                            if(fc.name === "agentOrbit") { icon = "fa-list-check"; color = "text-orange-400"; agentName = "Orbit"; }
+                            if(fc.name === "agentForge") { icon = "fa-code"; color = "text-green-400"; agentName = "Forge"; }
+                            if(fc.name === "agentPixel") { icon = "fa-palette"; color = "text-pink-400"; agentName = "Pixel"; }
+                            if(fc.name === "agentEcho") { icon = "fa-waveform"; color = "text-blue-400"; agentName = "Echo"; }
+                            if(fc.name === "agentArchivist") { icon = "fa-box-archive"; color = "text-yellow-400"; agentName = "Archivist"; }
+
+                            actionHtml += `<div><i class="fa-solid ${icon} ${color} w-5"></i> Delegating to <span class="text-white font-bold">${agentName}</span>...</div>`;
+                            
+                            // Actually execute the agent API call!
+                            const result = await executeNovaOSAction(fc);
+                            
+                            toolResponses.push({
+                                functionResponse: {
+                                    name: fc.name,
+                                    response: result
+                                }
+                            });
+                        }
+                    }
+                    
+                    appendChatBubble('os-action', actionHtml);
+                    
+                    novaChatHistoryData.push({
+                        role: "function", 
+                        parts: toolResponses
+                    });
+
+                    // Fetch next step from model after feeding it the OS action results
+                    response = await fetchNovaResponse(novaChatHistoryData, novaSearchToggle.checked);
+                    candidate = response.candidates?.[0];
+                }
+
+                // Final text response to user
+                const text = candidate?.content?.parts?.find(p => p.text)?.text || "Operation complete.";
+                novaChatHistoryData.push({ role: "model", parts: [{ text: text }] });
+
+                let sourcesHtml = '';
+                const grounding = candidate?.groundingMetadata?.groundingAttributions;
+                if (grounding && grounding.length > 0) {
+                    const sources = grounding.map(a => `<a href="${a.web?.uri}" target="_blank" class="text-cyan-400 underline hover:text-cyan-300 mr-2">${a.web?.title || 'Source'}</a>`).filter(Boolean);
+                    if(sources.length > 0) sourcesHtml = `<div class="mt-2 text-xs border-t border-white/10 pt-1 text-slate-400">🔍 Sources: ${sources.slice(0,3).join(' ')}</div>`;
+                }
+
+                loadingBubble.innerHTML = text.replace(/\n/g, '<br>') + sourcesHtml;
+            } catch (err) {
+                loadingBubble.innerHTML = `<span class="text-red-400">System Shell Error: ${err.message}</span>`;
+                // pop the last user message on error so they can try again smoothly
+                novaChatHistoryData.pop(); 
+            } finally {
+                // Disengage AI Hyperspace
+                systemState.aiActive = false;
+            }
+            novaChatHistory.scrollTop = novaChatHistory.scrollHeight;
+        }
+
+        function appendChatBubble(sender, content) {
+            const div = document.createElement('div');
+            if (sender === 'user') {
+                div.className = 'bg-cyan-600/30 border border-cyan-500/40 p-3 rounded-xl ml-8 text-slate-100';
+            } else if (sender === 'ai') {
+                div.className = 'bg-white/10 border border-white/10 p-3 rounded-xl mr-8 text-slate-200';
+            } else if (sender === 'os-action') {
+                // Special styling for OS shell actions
+                div.className = 'bg-black/60 border border-cyan-500/50 p-2 rounded-lg my-1 mx-8 text-xs font-mono text-cyan-400 shadow-[0_0_10px_rgba(0,217,255,0.2)]';
+            }
+            div.innerHTML = content;
+            novaChatHistory.appendChild(div);
+            novaChatHistory.scrollTop = novaChatHistory.scrollHeight;
+            return div;
+        }
+
+        novaSendBtn.addEventListener('click', sendNovaMessage);
+        novaInput.addEventListener('keydown', (e) => { if(e.key === 'Enter') sendNovaMessage(); });
+
+
+        // --- NEW: COSMIC PLANNER ✨ (gemini-2.5-flash-preview) ---
+        const plannerBtn = document.getElementById('btn-planner-ai');
+        const plannerGoalInput = document.getElementById('planner-goal');
+        const plannerResults = document.getElementById('planner-results');
+
+        plannerBtn.addEventListener('click', async () => {
+            const goal = plannerGoalInput.value.trim();
+            if (!goal) return;
+
+            plannerResults.innerHTML = `
+                <div class="text-orange-400 text-sm flex flex-col items-center justify-center h-full">
+                    <i class="fa-solid fa-wand-magic-sparkles fa-beat text-3xl mb-3"></i>
+                    <p>Gemini is orchestrating your plan...</p>
+                </div>`;
+            
+            try {
+                const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${GEMINI_API_KEY}`;
+                const payload = {
+                    contents: [{ parts: [{ text: `Break down this project into a detailed, logical step-by-step task list with distinct milestones: ${goal}` }] }],
+                    systemInstruction: { parts: [{ text: "You are an expert event and project planner. Output the entire response as raw HTML without markdown codeblocks or wrapper tags like ```html. Use standard HTML tags like <h3>, <ul>, <li>, and <strong>. Ensure it is visually clean and uses relevant emojis." }] }
+                };
+
+                const response = await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+                const result = await response.json();
+                
+                // Clean markdown code blocks if the model insists on adding them
+                let htmlOutput = result.candidates[0].content.parts[0].text;
+                htmlOutput = htmlOutput.replace(/^```html\s*/i, '').replace(/\s*```$/i, '');
+                
+                plannerResults.innerHTML = htmlOutput;
+            } catch (err) {
+                plannerResults.innerHTML = `<div class="text-red-400">Error planning task: ${err.message}</div>`;
+            }
+        });
+        
+        plannerGoalInput.addEventListener('keydown', (e) => { if(e.key === 'Enter') plannerBtn.click(); });
+
+
+        // --- 2. AI STUDIO & WALLPAPER GENERATOR (imagen-4.0) ---
+        const aiCanvasPrompt = document.getElementById('aicanvas-prompt');
+        const aiCanvasGenBtn = document.getElementById('aicanvas-gen-btn');
+        const aiCanvasLoader = document.getElementById('aicanvas-loader');
+        const aiCanvasPreview = document.getElementById('aicanvas-preview');
+        const aiCanvasPlaceholder = document.getElementById('aicanvas-placeholder');
+        const aiCanvasSetWallpaper = document.getElementById('aicanvas-set-wallpaper');
+
+        let lastGeneratedImageUrl = null;
+
+        aiCanvasGenBtn.addEventListener('click', async () => {
+            const prompt = aiCanvasPrompt.value.trim();
+            if(!prompt) return;
+
+            aiCanvasPlaceholder.classList.add('hidden');
+            aiCanvasPreview.classList.add('hidden');
+            aiCanvasLoader.classList.remove('hidden');
+            aiCanvasGenBtn.disabled = true;
+
+            try {
+                // Utilizing the supported image generation API in this environment
+                const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/imagen-4.0-generate-001:predict?key=${GEMINI_API_KEY}`;
+                
+                const payload = {
+                    instances: { prompt: prompt },
+                    parameters: { sampleCount: 1 }
+                };
+
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                const result = await response.json();
+                
+                if (result.predictions && result.predictions[0]) {
+                    lastGeneratedImageUrl = `data:image/png;base64,${result.predictions[0].bytesBase64Encoded}`;
+                    aiCanvasPreview.src = lastGeneratedImageUrl;
+                    aiCanvasPreview.classList.remove('hidden');
+                    aiCanvasSetWallpaper.disabled = false;
+                } else {
+                    alert('Could not generate image. Please try a different prompt.');
+                    aiCanvasPlaceholder.classList.remove('hidden');
+                }
+            } catch (err) {
+                alert(`Error generating image: ${err.message}`);
+                aiCanvasPlaceholder.classList.remove('hidden');
+            } finally {
+                aiCanvasLoader.classList.add('hidden');
+                aiCanvasGenBtn.disabled = false;
+            }
+        });
+
+        aiCanvasSetWallpaper.addEventListener('click', () => {
+            if(lastGeneratedImageUrl) {
+                document.body.style.backgroundImage = `url(${lastGeneratedImageUrl})`;
+                document.body.style.backgroundSize = 'cover';
+                document.body.style.backgroundPosition = 'center';
+            }
+        });
+
+        // --- 3. GEMINI VOICE STUDIO (gemini-2.5-flash-preview-tts) ---
+        let currentAudio = null;
+        let visualizerInterval = null;
+
+        function base64ToArrayBuffer(base64) {
+            const binaryString = window.atob(base64);
+            const len = binaryString.length;
+            const bytes = new Uint8Array(len);
+            for (let i = 0; i < len; i++) {
+                bytes[i] = binaryString.charCodeAt(i);
+            }
+            return bytes.buffer;
+        }
+
+        function pcmToWav(pcm16Data, sampleRate = 24000) {
+            const numChannels = 1;
+            const byteRate = sampleRate * numChannels * 2;
+            const blockAlign = numChannels * 2;
+            const dataSize = pcm16Data.length * 2;
+            const buffer = new ArrayBuffer(44 + dataSize);
+            const view = new DataView(buffer);
+
+            const writeString = (v, offset, str) => {
+                for (let i = 0; i < str.length; i++) v.setUint8(offset + i, str.charCodeAt(i));
+            };
+
+            writeString(view, 0, 'RIFF');
+            view.setUint32(4, 36 + dataSize, true);
+            writeString(view, 8, 'WAVE');
+            writeString(view, 12, 'fmt ');
+            view.setUint32(16, 16, true);
+            view.setUint16(20, 1, true);
+            view.setUint16(22, numChannels, true);
+            view.setUint32(24, sampleRate, true);
+            view.setUint32(28, byteRate, true);
+            view.setUint16(32, blockAlign, true);
+            view.setUint16(34, 16, true);
+            writeString(view, 36, 'data');
+            view.setUint32(40, dataSize, true);
+
+            let offset = 44;
+            for (let i = 0; i < pcm16Data.length; i++, offset += 2) {
+                view.setInt16(offset, pcm16Data[i], true);
+            }
+
+            return new Blob([buffer], { type: 'audio/wav' });
+        }
+
+        async function generateAndPlayGeminiTTS() {
+            const text = document.getElementById('tts-input').value.trim();
+            if (!text) return;
+
+            stopTTS();
+            const voice = document.getElementById('tts-voice-select').value;
+            const style = document.getElementById('tts-style-prompt').value;
+            const statusEl = document.getElementById('tts-status-text');
+
+            statusEl.innerText = "Synthesizing audio with Gemini 2.5 TTS...";
+            startVisualizer();
+
+            try {
+                const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-tts:generateContent?key=${GEMINI_API_KEY}`;
+                
+                const payload = {
+                    contents: [{ parts: [{ text: `${style} ${text}` }] }],
+                    generationConfig: {
+                        responseModalities: ["AUDIO"],
+                        speechConfig: {
+                            voiceConfig: {
+                                prebuiltVoiceConfig: { voiceName: voice }
+                            }
+                        }
+                    }
+                };
+
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                const result = await response.json();
+                const part = result?.candidates?.[0]?.content?.parts?.[0];
+                const base64Audio = part?.inlineData?.data;
+                const mimeType = part?.inlineData?.mimeType;
+
+                if (base64Audio) {
+                    const sampleRate = parseInt(mimeType?.match(/rate=(\d+)/)?.[1] || "24000", 10);
+                    const pcmBuffer = base64ToArrayBuffer(base64Audio);
+                    const pcm16 = new Int16Array(pcmBuffer);
+                    const wavBlob = pcmToWav(pcm16, sampleRate);
+                    const audioUrl = URL.createObjectURL(wavBlob);
+
+                    currentAudio = new Audio(audioUrl);
+                    currentAudio.onended = stopTTS;
+                    currentAudio.onerror = stopTTS;
+                    currentAudio.play();
+                    statusEl.innerText = `Playing voice (${voice})...`;
+                } else {
+                    alert("Audio synthesis payload empty.");
+                    stopTTS();
+                }
+            } catch (err) {
+                alert(`TTS Error: ${err.message}`);
+                stopTTS();
+            }
+        }
+
+        function stopTTS() {
+            if (currentAudio) {
+                currentAudio.pause();
+                currentAudio = null;
+            }
+            stopVisualizer();
+            document.getElementById('tts-status-text').innerText = "Ready for high-fidelity speech synthesis.";
+        }
+
+        function startVisualizer() {
+            systemState.audioPlaying = true;
+            const bars = document.querySelectorAll('#vs-visualizer .visualizer-bar');
+            visualizerInterval = setInterval(() => {
+                bars.forEach(bar => {
+                    const height = Math.floor(Math.random() * 22) + 4;
+                    bar.style.height = `${height}px`;
+                });
+            }, 80);
+        }
+
+        function stopVisualizer() {
+            systemState.audioPlaying = false;
+            clearInterval(visualizerInterval);
+            const bars = document.querySelectorAll('#vs-visualizer .visualizer-bar');
+            bars.forEach(bar => { bar.style.height = `4px`; });
+        }
+
+        document.getElementById('btn-tts-read').addEventListener('click', generateAndPlayGeminiTTS);
+        document.getElementById('btn-tts-stop').addEventListener('click', stopTTS);
+
+        // --- 4. NEBULA NOTES AI TOOLS ---
+        const noteArea = document.getElementById('notepad-textarea');
+
+        async function executeNoteAIAction(promptInstruction) {
+            const text = noteArea.value.trim();
+            if(!text) return;
+
+            const originalValue = noteArea.value;
+            noteArea.value = "⚡ Gemini AI is working on your text...";
+
+            try {
+                const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${GEMINI_API_KEY}`;
+                const payload = {
+                    contents: [{ parts: [{ text: `${promptInstruction}\n\nText:\n${text}` }] }]
+                };
+
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                const result = await response.json();
+                const output = result?.candidates?.[0]?.content?.parts?.[0]?.text;
+                if(output) {
+                    noteArea.value = output;
+                } else {
+                    noteArea.value = originalValue;
+                }
+            } catch (err) {
+                alert(`AI Document error: ${err.message}`);
+                noteArea.value = originalValue;
+            }
+        }
+
+        document.getElementById('note-ai-polish')?.addEventListener('click', () => {
+            executeNoteAIAction("Please polish, fix grammar, and improve the style of the following text while maintaining its core meaning:");
+        });
+
+        document.getElementById('note-ai-summarize')?.addEventListener('click', () => {
+            executeNoteAIAction("Please provide a concise, well-structured bulleted summary of the following text:");
+        });
+
+        // Open Planner on launch to demo the new feature!
+        setTimeout(() => { if(apps['planner']) apps['planner'].open(); }, 1200);
+
+        // --- UPLOAD LOGIC ---
+        const fileInput = document.createElement('input');
+        fileInput.type = 'file';
+        fileInput.multiple = true;
+        fileInput.style.display = 'none';
+        document.body.appendChild(fileInput);
+
+        window.fmUploadFile = function() { fileInput.click(); };
+
+        fileInput.addEventListener('change', (e) => {
+            const files = e.target.files;
+            if (!files.length) return;
+            
+            Array.from(files).forEach(file => {
+                const reader = new FileReader();
+                const isText = file.type.startsWith('text/') || file.name.match(/\.(txt|json|js|md|html|css|csv)$/i);
+                const isVideo = file.type.startsWith('video/');
+                const isAudio = file.type.startsWith('audio/');
+                const isImage = file.type.startsWith('image/');
+                
+                reader.onload = (evt) => {
+                    const newId = generateId();
+                    let type = 'file';
+                    if(isVideo) type = 'video';
+                    else if(isAudio) type = 'audio';
+                    else if(isImage) type = 'image';
+                    
+                    vfs[newId] = {
+                        id: newId,
+                        name: file.name,
+                        type: type,
+                        parentId: currentFmFolder,
+                        content: evt.target.result
+                    };
+                    renderFM(currentFmFolder);
+                };
+                
+                if (isText) reader.readAsText(file);
+                else reader.readAsDataURL(file);
+            });
+            fileInput.value = '';
+        });
+
+        // --- COSMIC ENGINE (Live Desktop) ---
+        function initCosmicEngine() {
+            const canvas = document.getElementById('cosmic-canvas');
+            const ctx = canvas.getContext('2d');
+            let width, height;
+            
+            function resize() {
+                width = canvas.width = window.innerWidth;
+                height = canvas.height = window.innerHeight;
+            }
+            window.addEventListener('resize', resize);
+            resize();
+
+            const stars = [];
+            const numStars = 400;
+            for (let i = 0; i < numStars; i++) {
+                stars.push({
+                    x: Math.random() * 2000 - 1000,
+                    y: Math.random() * 2000 - 1000,
+                    z: Math.random() * 2000,
+                    radius: Math.random() * 1.5 + 0.5,
+                    color: Math.random() > 0.8 ? '#00d9ff' : (Math.random() > 0.8 ? '#fb923c' : '#ffffff')
+                });
+            }
+
+            // Hook media player audio events
+            const vidEl = document.getElementById('media-player-video');
+            const audEl = document.getElementById('media-player-audio');
+            const toggleAudio = (isPlaying) => { systemState.audioPlaying = isPlaying; };
+            if(vidEl) { vidEl.addEventListener('play', () => toggleAudio(true)); vidEl.addEventListener('pause', () => toggleAudio(false)); }
+            if(audEl) { audEl.addEventListener('play', () => toggleAudio(true)); audEl.addEventListener('pause', () => toggleAudio(false)); }
+
+            function updateCPU() {
+                // Simulate CPU load based on OS activity
+                let targetCpu = systemState.aiActive ? (70 + Math.random() * 25) : (systemState.audioPlaying ? (30 + Math.random() * 20) : (5 + Math.random() * 10));
+                systemState.cpuLoad += (targetCpu - systemState.cpuLoad) * 0.1; // Smooth transition
+                
+                const cpuVal = document.getElementById('sys-cpu-val');
+                const cpuBar = document.getElementById('sys-cpu-bar');
+                if(cpuVal && cpuBar) {
+                    cpuVal.innerText = Math.round(systemState.cpuLoad) + '%';
+                    cpuBar.style.width = systemState.cpuLoad + '%';
+                    
+                    // Color code CPU
+                    if(systemState.cpuLoad > 75) cpuBar.className = 'h-2 rounded-full transition-all duration-500 bg-red-500';
+                    else if(systemState.cpuLoad > 40) cpuBar.className = 'h-2 rounded-full transition-all duration-500 bg-yellow-400';
+                    else cpuBar.className = 'h-2 rounded-full transition-all duration-500 bg-[#00d9ff]';
+                }
+            }
+            setInterval(updateCPU, 500);
+
+            let time = 0;
+            function animate() {
+                // Clear with transparent rect to allow background image to show, but clear trails
+                ctx.clearRect(0, 0, width, height);
+                time += 0.05;
+
+                let speedMultiplier = 1 + (systemState.cpuLoad / 100) * 3;
+                if (systemState.aiActive) speedMultiplier *= 8; // Warp speed!
+
+                const centerX = width / 2;
+                const centerY = height / 2;
+
+                ctx.lineCap = 'round';
+
+                stars.forEach(star => {
+                    star.z -= speedMultiplier;
+                    
+                    if (star.z <= 0) {
+                        star.z = 2000;
+                        star.x = Math.random() * 2000 - 1000;
+                        star.y = Math.random() * 2000 - 1000;
+                    }
+
+                    // 3D Perspective Projection
+                    const k = 128.0 / star.z;
+                    const px = star.x * k + centerX;
+                    const py = star.y * k + centerY;
+                    
+                    // Calculate previous position for trail effect
+                    const prevK = 128.0 / (star.z + speedMultiplier * 2);
+                    const prevPx = star.x * prevK + centerX;
+                    const prevPy = star.y * prevK + prevK * Math.sin(time) * (systemState.audioPlaying ? 20 : 0) + centerY;
+
+                    // Audio ripple effect on Y axis
+                    const audioYOffset = systemState.audioPlaying ? Math.sin(time + star.x) * 10 * k : 0;
+
+                    if (px >= 0 && px <= width && py + audioYOffset >= 0 && py + audioYOffset <= height) {
+                        // Draw trail
+                        ctx.beginPath();
+                        ctx.moveTo(prevPx, prevPy);
+                        ctx.lineTo(px, py + audioYOffset);
+                        
+                        // Dynamic opacity based on Z depth and audio
+                        let opacity = (1 - star.z / 2000);
+                        if(systemState.audioPlaying) opacity *= (0.5 + Math.abs(Math.sin(time * 2)) * 0.5);
+                        
+                        ctx.strokeStyle = star.color;
+                        ctx.globalAlpha = opacity;
+                        ctx.lineWidth = star.radius * k;
+                        ctx.stroke();
+                    }
+                });
+                
+                ctx.globalAlpha = 1.0;
+                requestAnimationFrame(animate);
+            }
+            animate();
+        }
+
+        // Initialize Cosmic Engine
+        initCosmicEngine();
+
+        // Initial render
+        renderFM('home');
+    </script>
+</body>
